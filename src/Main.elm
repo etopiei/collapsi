@@ -32,10 +32,11 @@ type alias Model =
     { tiles : List Tile
     , turn : Turn
     , movesLeft : Int
-    , redAt : ( Int, Int )
-    , blueAt : ( Int, Int )
-    , collapseNext : ( Int, Int )
+    , redAt : Coord
+    , blueAt : Coord
+    , collapseNext : Coord
     , badMoveReason : Maybe String
+    , visited : List Int
     , history : History
     }
 
@@ -102,9 +103,10 @@ update : Msg -> Model -> (Model, Cmd Msg)
 update msg state =
     case msg of
         MoveTo x y ->
-            let updatedState = { state | badMoveReason = Nothing, tiles = List.indexedMap (collapseAt state.collapseNext) state.tiles } in
+            let updatedVisited = List.append [(xyToIndex (x, y))] state.visited in
+            let updatedState = { state | badMoveReason = Nothing, tiles = List.indexedMap (collapseAt state.collapseNext) state.tiles, visited = updatedVisited } in
             let postMoveState = if state.movesLeft == 1 then if state.turn == Red then
-                    { updatedState | redAt = ( x, y ), movesLeft = movesForPlayer state.blueAt state, turn = Blue, collapseNext = state.blueAt} else { updatedState | blueAt = ( x, y ), movesLeft = movesForPlayer state.redAt state, turn = Red, collapseNext = state.redAt } else
+                    { updatedState | redAt = ( x, y ), movesLeft = movesForPlayer state.blueAt state, turn = Blue, collapseNext = state.blueAt, visited = []} else { updatedState | blueAt = ( x, y ), movesLeft = movesForPlayer state.redAt state, turn = Red, collapseNext = state.redAt, visited = [] } else
                     if state.turn == Red then
                         { updatedState | redAt = ( x, y ), movesLeft = state.movesLeft - 1 }
 
@@ -135,12 +137,13 @@ getOpponentPos state = case state.turn of
 checkTileIsAccesible : Coord -> Model -> Msg
 checkTileIsAccesible (toX, toY) state = let (fromX, fromY) = getFromPos state in
     let (oppX, oppY) = getOpponentPos state in
-    if (oppX == toX) && (oppY == toY) && (state.movesLeft == 1) then InvalidMoveAttempted "Can't finish on opponent's square" else
-        if (abs (fromX - toX)) + (abs (fromY - toY)) == 1 then MoveTo toX toY else
-            if (fromX == 3) && (toX == 0) && (fromY == toY) then MoveTo toX toY else
-                if (fromY == 3) && (toY == 0) && (fromX == toX) then MoveTo toX toY else
-                    if (fromX == 0) && (toX == 3) && (fromY == toY) then MoveTo toX toY else
-                        if (fromY == 0) && (toY == 3) && (fromX == toX) then MoveTo toX toY else InvalidMoveAttempted "Can't move to non-adjacent tile."
+    if (oppX == toX) && (oppY == toY) && (state.movesLeft == 1) then InvalidMoveAttempted "Can't finish on opponent's tile" else
+        if List.member (xyToIndex (toX, toY)) state.visited then InvalidMoveAttempted "Can't re-visit a tile during a turn" else
+            if (abs (fromX - toX)) + (abs (fromY - toY)) == 1 then MoveTo toX toY else
+                if (fromX == 3) && (toX == 0) && (fromY == toY) then MoveTo toX toY else
+                    if (fromY == 3) && (toY == 0) && (fromX == toX) then MoveTo toX toY else
+                        if (fromX == 0) && (toX == 3) && (fromY == toY) then MoveTo toX toY else
+                            if (fromY == 0) && (toY == 3) && (fromX == toX) then MoveTo toX toY else InvalidMoveAttempted "Can't move to non-adjacent tile."
 
 
 checkMoveValid : Coord -> Model -> Msg
@@ -186,7 +189,7 @@ collapsedAttrs index state = [
 
 renderTile : Model -> Int -> Tile -> Html Msg
 renderTile state index tile = let blueAtIndex = xyToIndex state.blueAt in let redAtIndex = xyToIndex state.redAt in case tile of
-    Collapsed -> div (collapsedAttrs index state) [text "Collapsed"]
+    Collapsed -> div (collapsedAttrs index state) [text "x"]
     Tile x -> div (tileAttrs index blueAtIndex redAtIndex state) [text (String.fromInt x)]
     RedStart -> div (tileAttrs index blueAtIndex redAtIndex state) [text "Red Start"]
     BlueStart -> div (tileAttrs index blueAtIndex redAtIndex state) [text "Blue Start"]
@@ -210,10 +213,13 @@ renderTurn state = case state.turn of
 gameExplain : List (Html Msg) 
 gameExplain = [ text "Collapsi was invented by 'Riffle Shuffle and Roll' on youtube, you can watch him explain the rules "
     , a [href "https://www.youtube.com/watch?v=6vYEHdjlw3g"] [text "here."]
-    , p [] [text "To play Collapsi take turns making moves. Each turn you must move the same number of times as is shown on your starting tile (the first move you must move 4 times). The winner is the last player able to complete their turn. Each time you take a turn the tile you originate on 'collapses' and is no longer available to move on. You can move up, down, left and right. As well as being able to 'wrap-around' like pacman along columns and rows (so long as where you wrap to hasn't collapsed). You can move 'through' a tile that your opponent is on, but cannot finish on their tile. Good luck trapping your opponent!"]]
+    , p [] [text "To play Collapsi take turns making moves. Each turn you must move the same number of times as is shown on your starting tile (the first move you must move 4 times). The winner is the last player able to complete their turn. Each time you take a turn the tile you originate on 'collapses' and is no longer available to move on. You can move up, down, left and right. As well as being able to 'wrap-around' like pacman along columns and rows (so long as where you wrap to hasn't collapsed). You can move 'through' a tile that your opponent is on, but cannot finish on their tile. You also cannot re-visit a tile during a single turn. Good luck trapping your opponent!"]]
+
+globalStyle : Html.Attribute Msg
+globalStyle = style "font-family" "Verdana, sans-serif"
 
 view : Model -> Html Msg
-view state = div [] [
+view state = div [globalStyle] [
     h1 [] [text "Collapsi"]
     , div boardGridClasses (List.indexedMap (renderTile state) state.tiles)
     , p [] (renderTurn state)
@@ -255,18 +261,19 @@ initialBoard = [
 
 
 initModel : Model
-initModel = { tiles = initialBoard
+initModel = { tiles = [] 
     , turn = Blue
     , movesLeft = 4
     , redAt = ( 0, 3 )
     , blueAt = ( 2, 1 )
     , collapseNext = ( 2, 1 )
     , badMoveReason = Nothing
+    , visited = []
     , history = History []
     }
 
 init : a -> (Model, Cmd Msg)
-init _ = (initModel, (shuffleBoard initModel.tiles))
+init _ = (initModel, (shuffleBoard initialBoard))
 
 
 main : Program () Model Msg
@@ -284,6 +291,6 @@ main =
 -- ~~Only allow moves when they are valid~~
 -- ~~Style it nicer~~
 -- ~~Make board generation random~~
--- Don't allow re-visiting squares and update game rules
+-- ~~Don't allow re-visiting tiles and update game rules~~
 -- Detect win/loss
 -- Add an AI to play against that makes random valid moves
