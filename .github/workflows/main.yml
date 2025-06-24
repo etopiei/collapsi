@@ -25,6 +25,7 @@ jobs:
         uses: reggionick/s3-deploy@v4
         with:
           folder: .
+          files-to-include: '{*.html}'
           bucket: ${{ secrets.S3_BUCKET }}
           bucket-region: ${{ secrets.S3_BUCKET_REGION }}
           delete-removed: true
