@@ -5,7 +5,7 @@ import Html.Attributes exposing (style, href)
 import Html.Events exposing (onClick)
 import Random.List exposing (shuffle)
 import Random
-import Browser exposing (element)
+import Browser exposing (document)
 
 type Tile
     = Tile Int
@@ -218,8 +218,8 @@ gameExplain = [ text "Collapsi was invented by 'Riffle Shuffle and Roll' on yout
 globalStyle : Html.Attribute Msg
 globalStyle = style "font-family" "Verdana, sans-serif"
 
-view : Model -> Html Msg
-view state = div [globalStyle] [
+view : Model -> Browser.Document Msg 
+view state = { title = "Collapsi" , body = [(div [globalStyle] [
     h1 [] [text "Collapsi"]
     , div boardGridClasses (List.indexedMap (renderTile state) state.tiles)
     , p [] (renderTurn state)
@@ -230,7 +230,7 @@ view state = div [globalStyle] [
         History [] -> button [] [text "Undo Last Move"]
         _ -> button [onClick Undo] [text "Undo Last Move"]
     , button [onClick Reset] [text "New Game"]
-    , p [] gameExplain ]
+    , p [] gameExplain ])]}
 
 messageFromNewBoard : List Tile -> Msg
 messageFromNewBoard newBoard = ShuffledBoard newBoard
@@ -278,7 +278,7 @@ init _ = (initModel, (shuffleBoard initialBoard))
 
 main : Program () Model Msg
 main =
-    element { init=init, view=view, update=update, subscriptions=\_ -> Sub.none }
+    document { init=init, view=view, update=update, subscriptions=\_ -> Sub.none }
 
 
 -- TODOs: 
