@@ -99,13 +99,8 @@ movesForPlayer coord state =
                 _ ->
                     4
 
-        -- This shouldn't happen, except at the start or end of the game
         _ ->
             4
-
-
-
--- This should never happen
 
 
 safeUndoHead : List Model -> ( Model, Cmd Msg )
@@ -151,18 +146,18 @@ update msg state =
             in
             let
                 postMoveState =
-                    if state.movesLeft == 1 then
-                        if state.turn == Red then
+                    case ( state.movesLeft, state.turn ) of
+                        ( 1, Red ) ->
                             { updatedState | redAt = ( x, y ), movesLeft = movesForPlayer state.blueAt state, turn = Blue, collapseNext = state.blueAt, visited = [] }
 
-                        else
+                        ( 1, Blue ) ->
                             { updatedState | blueAt = ( x, y ), movesLeft = movesForPlayer state.redAt state, turn = Red, collapseNext = state.redAt, visited = [] }
 
-                    else if state.turn == Red then
-                        { updatedState | redAt = ( x, y ), movesLeft = state.movesLeft - 1 }
+                        ( _, Red ) ->
+                            { updatedState | redAt = ( x, y ), movesLeft = state.movesLeft - 1 }
 
-                    else
-                        { updatedState | blueAt = ( x, y ), movesLeft = state.movesLeft - 1 }
+                        _ ->
+                            { updatedState | blueAt = ( x, y ), movesLeft = state.movesLeft - 1 }
             in
             case state.history of
                 History priorHistory ->
